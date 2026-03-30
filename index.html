@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE ÆTHERFORGE — Steampunk VR Workshop</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.5.0/aframe.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Cutive+Mono&family=Playfair+Display:ital,wght@0,700;1,400&display=swap');
+
+  :root {
+    --brass: #C8963E;
+    --bronze: #8B5E3C;
+    --copper: #B87333;
+    --rust: #7A3B1E;
+    --steam: #D4C4A0;
+    --dark: #0D0A06;
+    --dark2: #1A1208;
+    --amber: #FFB347;
+    --glow: #FF6B1A;
+    --teal: #2A7A6E;
+    --ivory: #F5EDD6;
+    --smoke: rgba(200,180,140,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--dark);
+    font-family: 'Special Elite', serif;
+    color: var(--ivory);
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+  }
+
+  /* ── LOADING SCREEN ── */
+  #loading-screen {
+    position: fixed; inset: 0; z-index: 1000;
+    background: var(--dark);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 1s ease;
+  }
+  #loading-screen.fade-out { opacity: 0; pointer-events: none; }
+
+  .load-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2rem, 5vw, 4rem);
+    color: var(--brass);
+    letter-spacing: 0.3em;
+    text-align: center;
+    margin-bottom: 0.3em;
+    text-shadow: 0 0 40px rgba(200,150,62,0.6);
+    animation: flicker 3s ease-in-out infinite;
+  }
+  .load-sub {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--steam);
+    letter-spacing: 0.5em;
+    text-transform: uppercase;
+    margin-bottom: 3rem;
+  }
+  .load-bar-wrap {
+    width: 320px; height: 2px;
+    background: rgba(200,150,62,0.2);
+    position: relative; overflow: hidden;
+    border-radius: 2px;
+  }
+  .load-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--copper), var(--amber), var(--brass));
+    width: 0%;
+    animation: loadProgress 2.5s cubic-bezier(0.4,0,0.2,1) forwards;
+    box-shadow: 0 0 12px var(--amber);
+  }
+  .load-status {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--copper);
+    letter-spacing: 0.2em;
+    margin-top: 1rem;
+  }
+  .gear-anim {
+    font-size: 3rem; margin-bottom: 1.5rem;
+    animation: spin 4s linear infinite;
+    display: block; opacity: 0.6;
+  }
+
+  @keyframes loadProgress { to { width: 100%; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes flicker {
+    0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:0.7} 94%{opacity:1} 96%{opacity:0.8}
+  }
+
+  /* ── HOLOGRAPHIC HUD OVERLAY ── */
+  #hud {
+    position: fixed; inset: 0; z-index: 50;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+  }
+  #hud.hidden { display: none; }
+
+  .hud-corner {
+    width: 60px; height: 60px;
+    border-color: var(--brass);
+    opacity: 0.5;
+    position: absolute;
+  }
+  .hud-tl { top: 12px; left: 12px; border-top: 1px solid; border-left: 1px solid; }
+  .hud-tr { top: 12px; right: 12px; border-top: 1px solid; border-right: 1px solid; }
+  .hud-bl { bottom: 12px; left: 12px; border-bottom: 1px solid; border-left: 1px solid; }
+  .hud-br { bottom: 12px; right: 12px; border-bottom: 1px solid; border-right: 1px solid; }
+
+  .hud-header {
+    display: flex; align-items: center; justify-content: space-between;
+    pointer-events: auto;
+  }
+  .hud-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem; color: var(--brass);
+    letter-spacing: 0.4em;
+    text-shadow: 0 0 20px rgba(200,150,62,0.5);
+  }
+  .hud-mode {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; color: var(--teal);
+    letter-spacing: 0.3em;
+    background: rgba(42,122,110,0.1);
+    border: 1px solid rgba(42,122,110,0.3);
+    padding: 4px 12px; border-radius: 2px;
+  }
+
+  .hud-bottom {
+    display: flex; align-items: flex-end;
+    justify-content: space-between;
+    pointer-events: auto;
+  }
+
+  /* ── INVENTORY PANEL ── */
+  #inventory-panel {
+    position: fixed; left: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: linear-gradient(135deg, rgba(13,10,6,0.97), rgba(26,18,8,0.97));
+    border-right: 1px solid rgba(200,150,62,0.3);
+    border-top: 1px solid rgba(200,150,62,0.15);
+    border-bottom: 1px solid rgba(200,150,62,0.15);
+    z-index: 100;
+    padding: 1.5rem 1rem;
+    transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+    backdrop-filter: blur(20px);
+    max-height: 80vh; overflow-y: auto;
+  }
+  #inventory-panel.collapsed { transform: translateY(-50%) translateX(-250px); }
+
+  .panel-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.85rem; color: var(--brass);
+    letter-spacing: 0.4em; text-transform: uppercase;
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 1px solid rgba(200,150,62,0.2);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel-title::before { content: '⚙'; font-size: 0.9rem; animation: spin 8s linear infinite; }
+
+  .mat-category {
+    margin-bottom: 1.2rem;
+  }
+  .cat-label {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; color: var(--copper);
+    letter-spacing: 0.3em; text-transform: uppercase;
+    margin-bottom: 0.6rem;
+    opacity: 0.7;
+  }
+
+  .mat-grid {
+    display: grid; grid-template-columns: repeat(3,1fr); gap: 6px;
+  }
+
+  .mat-item {
+    background: rgba(200,150,62,0.06);
+    border: 1px solid rgba(200,150,62,0.15);
+    border-radius: 3px; padding: 8px 4px;
+    text-align: center; cursor: grab;
+    transition: all 0.2s ease;
+    position: relative;
+    user-select: none;
+  }
+  .mat-item:hover {
+    background: rgba(200,150,62,0.15);
+    border-color: rgba(200,150,62,0.5);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(200,150,62,0.1);
+  }
+  .mat-item:active { cursor: grabbing; transform: scale(0.95); }
+  .mat-icon { font-size: 1.4rem; display: block; margin-bottom: 3px; }
+  .mat-name {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.5rem; color: var(--steam);
+    letter-spacing: 0.1em;
+  }
+  .mat-count {
+    position: absolute; top: 2px; right: 4px;
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.55rem; color: var(--amber);
+  }
+  .mat-item.unlimited .mat-count::after { content: '∞'; }
+
+  /* ── CRAFTING PANEL ── */
+  #crafting-panel {
+    position: fixed; right: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 300px;
+    background: linear-gradient(225deg, rgba(13,10,6,0.97), rgba(26,18,8,0.97));
+    border-left: 1px solid rgba(200,150,62,0.3);
+    border-top: 1px solid rgba(200,150,62,0.15);
+    border-bottom: 1px solid rgba(200,150,62,0.15);
+    z-index: 100;
+    padding: 1.5rem 1rem;
+    transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+    backdrop-filter: blur(20px);
+    max-height: 80vh; overflow-y: auto;
+  }
+  #crafting-panel.collapsed { transform: translateY(-50%) translateX(270px); }
+
+  .recipe-grid { display: flex; flex-direction: column; gap: 8px; }
+
+  .recipe-card {
+    background: rgba(200,150,62,0.04);
+    border: 1px solid rgba(200,150,62,0.12);
+    border-radius: 4px; padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative; overflow: hidden;
+  }
+  .recipe-card::before {
+    content: ''; position: absolute; left: 0; top: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(to bottom, var(--copper), var(--brass));
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .recipe-card:hover { background: rgba(200,150,62,0.1); border-color: rgba(200,150,62,0.35); }
+  .recipe-card:hover::before { opacity: 1; }
+  .recipe-card.crafting-active { border-color: var(--amber); animation: pulse 1s ease infinite; }
+
+  .recipe-name {
+    font-family: 'Special Elite', serif;
+    font-size: 0.75rem; color: var(--ivory);
+    margin-bottom: 4px;
+  }
+  .recipe-desc {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.55rem; color: var(--steam);
+    opacity: 0.6; margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .recipe-mats {
+    display: flex; flex-wrap: wrap; gap: 4px;
+  }
+  .recipe-mat-tag {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.5rem; color: var(--copper);
+    background: rgba(184,115,51,0.12);
+    border: 1px solid rgba(184,115,51,0.25);
+    padding: 2px 6px; border-radius: 2px;
+  }
+  .craft-btn {
+    margin-top: 8px;
+    background: linear-gradient(90deg, rgba(200,150,62,0.2), rgba(200,150,62,0.1));
+    border: 1px solid rgba(200,150,62,0.4);
+    color: var(--brass);
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; letter-spacing: 0.2em;
+    padding: 5px 12px; cursor: pointer;
+    border-radius: 2px; text-transform: uppercase;
+    transition: all 0.2s;
+    width: 100%;
+  }
+  .craft-btn:hover { background: rgba(200,150,62,0.3); box-shadow: 0 0 12px rgba(200,150,62,0.2); }
+
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,179,71,0.3)} 50%{box-shadow:0 0 0 6px rgba(255,179,71,0)} }
+
+  /* ── WORKBENCH / 3D CANVAS ── */
+  #scene-container {
+    position: fixed; inset: 0; z-index: 1;
+  }
+
+  /* ── DROP ZONE ── */
+  #drop-zone {
+    position: fixed; bottom: 100px; left: 50%;
+    transform: translateX(-50%);
+    width: 400px; height: 120px;
+    border: 2px dashed rgba(200,150,62,0.3);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(13,10,6,0.7);
+    backdrop-filter: blur(10px);
+    z-index: 90;
+    transition: all 0.3s ease;
+    flex-direction: column; gap: 8px;
+  }
+  #drop-zone.drag-over {
+    border-color: var(--amber);
+    background: rgba(200,150,62,0.1);
+    box-shadow: 0 0 30px rgba(200,150,62,0.15);
+  }
+  .drop-label {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; color: var(--steam);
+    letter-spacing: 0.3em; opacity: 0.6;
+  }
+  .drop-slots { display: flex; gap: 10px; }
+  .drop-slot {
+    width: 50px; height: 50px;
+    border: 1px solid rgba(200,150,62,0.25);
+    border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem;
+    background: rgba(200,150,62,0.05);
+    transition: all 0.2s;
+  }
+  .drop-slot.filled {
+    border-color: var(--brass);
+    background: rgba(200,150,62,0.15);
+  }
+
+  /* ── WORKBENCH 3D VIEW ── */
+  #workbench-view {
+    position: fixed; left: 50%; bottom: 60px;
+    transform: translateX(-50%);
+    width: 500px; height: 300px;
+    background: rgba(13,10,6,0.9);
+    border: 1px solid rgba(200,150,62,0.2);
+    border-radius: 6px; overflow: hidden; z-index: 80;
+    backdrop-filter: blur(20px);
+    transition: all 0.4s ease;
+  }
+  #workbench-view.hidden { transform: translateX(-50%) translateY(120%); }
+  #workbench-canvas { width: 100%; height: 100%; display: block; }
+
+  .wb-header {
+    position: absolute; top: 0; left: 0; right: 0;
+    padding: 8px 16px;
+    background: rgba(13,10,6,0.9);
+    border-bottom: 1px solid rgba(200,150,62,0.15);
+    display: flex; align-items: center; justify-content: space-between;
+    z-index: 2;
+  }
+  .wb-title {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; color: var(--brass);
+    letter-spacing: 0.3em; text-transform: uppercase;
+  }
+  .wb-close {
+    background: none; border: none;
+    color: var(--steam); cursor: pointer; font-size: 0.8rem;
+    opacity: 0.5; transition: opacity 0.2s;
+  }
+  .wb-close:hover { opacity: 1; }
+
+  /* ── NOTIFICATION ── */
+  #notif {
+    position: fixed; top: 5rem; left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: rgba(13,10,6,0.95);
+    border: 1px solid rgba(200,150,62,0.4);
+    padding: 10px 24px;
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.65rem; color: var(--amber);
+    letter-spacing: 0.2em;
+    border-radius: 3px; z-index: 200;
+    opacity: 0; transition: all 0.3s ease;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 0 20px rgba(200,150,62,0.1);
+  }
+  #notif.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── TOOLBAR ── */
+  #toolbar {
+    position: fixed; bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 4px; padding: 12px 20px;
+    background: rgba(13,10,6,0.95);
+    border-top: 1px solid rgba(200,150,62,0.2);
+    border-left: 1px solid rgba(200,150,62,0.1);
+    border-right: 1px solid rgba(200,150,62,0.1);
+    border-radius: 6px 6px 0 0; z-index: 100;
+    backdrop-filter: blur(20px);
+  }
+
+  .tool-btn {
+    background: rgba(200,150,62,0.05);
+    border: 1px solid rgba(200,150,62,0.2);
+    color: var(--steam);
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.55rem; letter-spacing: 0.15em;
+    padding: 8px 16px; cursor: pointer;
+    border-radius: 2px; text-transform: uppercase;
+    transition: all 0.2s; white-space: nowrap;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .tool-btn .t-icon { font-size: 1rem; }
+  .tool-btn:hover, .tool-btn.active {
+    background: rgba(200,150,62,0.15);
+    border-color: var(--brass); color: var(--brass);
+    box-shadow: 0 0 10px rgba(200,150,62,0.1);
+  }
+  .tool-btn.active { color: var(--amber); }
+
+  /* ── VR BUTTON ── */
+  #vr-btn {
+    position: fixed; top: 50%; right: 20px;
+    transform: translateY(-50%);
+    background: rgba(13,10,6,0.9);
+    border: 1px solid rgba(200,150,62,0.4);
+    color: var(--brass);
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; letter-spacing: 0.2em;
+    padding: 16px 10px; cursor: pointer;
+    border-radius: 3px; z-index: 100;
+    writing-mode: vertical-rl; text-transform: uppercase;
+    transition: all 0.2s; backdrop-filter: blur(10px);
+  }
+  #vr-btn:hover { background: rgba(200,150,62,0.15); box-shadow: 0 0 20px rgba(200,150,62,0.2); }
+
+  /* ── INSPECTION POPUP ── */
+  #inspect-popup {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(10,8,4,0.97);
+    border: 1px solid rgba(200,150,62,0.4);
+    padding: 2rem; min-width: 340px;
+    z-index: 300; border-radius: 6px;
+    backdrop-filter: blur(30px);
+    box-shadow: 0 0 60px rgba(200,150,62,0.08);
+    opacity: 0; pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  }
+  #inspect-popup.show { opacity: 1; pointer-events: all; transform: translate(-50%,-50%) scale(1); }
+  .inspect-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1rem; color: var(--brass);
+    margin-bottom: 0.3rem;
+  }
+  .inspect-sub {
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem; color: var(--copper);
+    letter-spacing: 0.3em; margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(200,150,62,0.15);
+  }
+  .inspect-stats { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1rem; }
+  .stat-row {
+    display: flex; justify-content: space-between;
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.6rem;
+  }
+  .stat-key { color: var(--steam); opacity: 0.6; }
+  .stat-val { color: var(--amber); }
+  .stat-bar {
+    height: 2px; background: rgba(200,150,62,0.15);
+    border-radius: 2px; overflow: hidden; margin-top: 2px;
+  }
+  .stat-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--copper), var(--amber));
+  }
+  .inspect-actions { display: flex; gap: 8px; }
+  .inspect-btn {
+    flex: 1; background: rgba(200,150,62,0.08);
+    border: 1px solid rgba(200,150,62,0.25);
+    color: var(--steam);
+    font-family: 'Cutive Mono', monospace;
+    font-size: 0.55rem; letter-spacing: 0.15em;
+    padding: 8px; cursor: pointer;
+    border-radius: 2px; text-transform: uppercase;
+    transition: all 0.2s;
+  }
+  .inspect-btn:hover { background: rgba(200,150,62,0.2); color: var(--brass); }
+  .inspect-btn.primary { border-color: var(--brass); color: var(--brass); }
+
+  /* ── STEAM PARTICLES ── */
+  #particles { position: fixed; inset: 0; pointer-events: none; z-index: 5; overflow: hidden; }
+  .particle {
+    position: absolute; width: 4px; height: 4px;
+    background: rgba(200,180,140,0.15); border-radius: 50%;
+    animation: float linear infinite;
+  }
+  @keyframes float {
+    0% { transform: translateY(100vh) translateX(0) scale(0); opacity: 0; }
+    10% { opacity: 1; }
+    90% { opacity: 0.3; }
+    100% { transform: translateY(-100px) translateX(var(--drift)) scale(2); opacity: 0; }
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: rgba(200,150,62,0.05); }
+  ::-webkit-scrollbar-thumb { background: rgba(200,150,62,0.3); border-radius: 2px; }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    #inventory-panel { width: 220px; }
+    #crafting-panel { width: 220px; }
+    #workbench-view { width: 95vw; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <span class="gear-anim">⚙</span>
+  <div class="load-logo">ÆTHERFORGE</div>
+  <div class="load-sub">Steampunk Workshop · Est. 1886</div>
+  <div class="load-bar-wrap"><div class="load-bar"></div></div>
+  <div class="load-status" id="load-status">Calibrating steam pressure...</div>
+</div>
+
+<!-- PARTICLES -->
+<div id="particles"></div>
+
+<!-- SCENE -->
+<div id="scene-container">
+<a-scene id="main-scene"
+  embedded
+  renderer="antialias: true; colorManagement: true; physicallyCorrectLights: true; toneMapping: ACESFilmic"
+  vr-mode-ui="enabled: true"
+  loading-screen="enabled: false"
+  background="color: #080604">
+
+  <!-- Assets -->
+  <a-assets>
+    <a-mixin id="metallic" material="metalness:0.9; roughness:0.2"></a-mixin>
+    <a-mixin id="wood" material="metalness:0.1; roughness:0.8"></a-mixin>
+    <a-mixin id="glass" material="transparent:true; opacity:0.3; metalness:0.1; roughness:0"></a-mixin>
+  </a-assets>
+
+  <!-- ENVIRONMENT LIGHTING -->
+  <a-entity light="type:ambient; color:#3A2810; intensity:0.4"></a-entity>
+  <a-entity light="type:point; color:#D4883A; intensity:2.5; distance:15; decay:2"
+    position="0 6 0" animation="property:light.intensity; from:2.5; to:1.8; dur:3000; dir:alternate; loop:true; easing:sinusoidalInOut">
+  </a-entity>
+  <a-entity light="type:point; color:#FF6820; intensity:1.2; distance:8"
+    position="-4 2 -6" animation="property:light.intensity; from:1.2; to:0.6; dur:1800; dir:alternate; loop:true; easing:sinusoidalInOut">
+  </a-entity>
+  <a-entity light="type:point; color:#2A6070; intensity:0.8; distance:10"
+    position="4 3 -4"></a-entity>
+  <a-entity light="type:directional; color:#C8963E; intensity:0.6" position="-1 4 2"></a-entity>
+
+  <!-- FLOOR — aged wood planks -->
+  <a-plane position="0 0 0" rotation="-90 0 0" width="30" height="30"
+    material="color:#2A1A0A; roughness:0.95; metalness:0; repeat:6 6"
+    shadow="receive:true">
+  </a-plane>
+  <!-- Floor details -->
+  <a-plane position="0 0.01 0" rotation="-90 0 0" width="30" height="30"
+    material="color:#1C1208; opacity:0.6; transparent:true">
+  </a-plane>
+
+  <!-- WALLS -->
+  <!-- Back wall -->
+  <a-plane position="0 5 -12" rotation="0 0 0" width="24" height="10"
+    material="color:#1A1008; roughness:0.9; metalness:0.1">
+  </a-plane>
+  <!-- Left wall -->
+  <a-plane position="-12 5 0" rotation="0 90 0" width="24" height="10"
+    material="color:#181008; roughness:0.9; metalness:0.1">
+  </a-plane>
+  <!-- Right wall -->
+  <a-plane position="12 5 0" rotation="0 -90 0" width="24" height="10"
+    material="color:#181008; roughness:0.9; metalness:0.1">
+  </a-plane>
+  <!-- Ceiling -->
+  <a-plane position="0 10 0" rotation="90 0 0" width="24" height="24"
+    material="color:#0D0904; roughness:1; metalness:0">
+  </a-plane>
+
+  <!-- STRUCTURAL BEAMS -->
+  <a-entity position="-8 5 -6">
+    <a-box width="0.3" height="10" depth="0.3" material="color:#3A2510; roughness:0.8"></a-box>
+    <a-box width="0.4" height="0.1" depth="8" position="0 5 3" material="color:#2A1A08; roughness:0.9"></a-box>
+  </a-entity>
+  <a-entity position="8 5 -6">
+    <a-box width="0.3" height="10" depth="0.3" material="color:#3A2510; roughness:0.8"></a-box>
+  </a-entity>
+  <a-box position="0 9.5 -6" width="16" height="0.4" depth="0.4" material="color:#2A1A08; roughness:0.85"></a-box>
+  <a-box position="0 9.5 2" width="16" height="0.4" depth="0.4" material="color:#2A1A08; roughness:0.85"></a-box>
+
+  <!-- MAIN WORKBENCH TABLE -->
+  <a-entity id="workbench" position="0 0 -5">
+    <!-- Table top -->
+    <a-box id="bench-top" position="0 1.0 0" width="6" height="0.12" depth="2.5"
+      material="color:#3A2208; roughness:0.75; metalness:0.05"
+      shadow="cast:true; receive:true"
+      class="clickable"
+      data-item="workbench">
+    </a-box>
+    <!-- Table legs -->
+    <a-box position="-2.8 0.5 1" width="0.12" height="1.0" depth="0.12" material="color:#2A1808; roughness:0.8"></a-box>
+    <a-box position="2.8 0.5 1" width="0.12" height="1.0" depth="0.12" material="color:#2A1808; roughness:0.8"></a-box>
+    <a-box position="-2.8 0.5 -1" width="0.12" height="1.0" depth="0.12" material="color:#2A1808; roughness:0.8"></a-box>
+    <a-box position="2.8 0.5 -1" width="0.12" height="1.0" depth="0.12" material="color:#2A1808; roughness:0.8"></a-box>
+    <!-- Metal edge strip -->
+    <a-box position="0 1.06 1.24" width="6" height="0.02" depth="0.02"
+      material="color:#C8963E; metalness:0.9; roughness:0.2"></a-box>
+    <!-- Vice grip -->
+    <a-entity position="3.2 1.12 0">
+      <a-box width="0.5" height="0.25" depth="0.4" material="color:#6A4A2A; metalness:0.7; roughness:0.3"></a-box>
+      <a-cylinder radius="0.04" height="0.8" rotation="0 0 90" position="0.5 0 0"
+        material="color:#B87333; metalness:0.8"></a-cylinder>
+    </a-entity>
+  </a-entity>
+
+  <!-- TOOL WALL RACK (left) -->
+  <a-entity position="-10 3 -8">
+    <a-box width="0.1" height="4" depth="0.08" position="0 0 0" material="color:#4A2808; roughness:0.8"></a-box>
+    <!-- Wrenches -->
+    <a-entity position="0.5 1 0.05">
+      <a-box width="0.08" height="0.8" depth="0.04" material="color:#8B6A3A; metalness:0.85; roughness:0.2"
+        class="clickable interactive-object" data-item="wrench" data-name="Brass Wrench"></a-box>
+      <a-torus radius="0.1" radiusTubular="0.02" position="0 0.45 0"
+        material="color:#C8963E; metalness:0.9"></a-torus>
+    </a-entity>
+    <a-entity position="1.0 0.8 0.05">
+      <a-box width="0.06" height="0.9" depth="0.04" material="color:#6A4A2A; metalness:0.8; roughness:0.3"
+        class="clickable interactive-object" data-item="hammer" data-name="Steam Hammer"></a-box>
+      <a-box width="0.18" height="0.18" depth="0.12" position="0 0.5 0"
+        material="color:#8B5E3C; metalness:0.75"></a-box>
+    </a-entity>
+    <!-- Gear rack -->
+    <a-entity position="0 -1.2 0.1">
+      <a-torus id="gear1" radius="0.3" radiusTubular="0.04" segments-radial="16"
+        material="color:#C8963E; metalness:0.9; roughness:0.15"
+        animation="property:rotation; from:0 0 0; to:0 0 360; dur:6000; loop:true; easing:linear">
+      </a-torus>
+    </a-entity>
+    <a-entity position="0.65 -1.2 0.1">
+      <a-torus id="gear2" radius="0.2" radiusTubular="0.03" segments-radial="12"
+        material="color:#B87333; metalness:0.9; roughness:0.2"
+        animation="property:rotation; from:0 0 0; to:0 0 -360; dur:4000; loop:true; easing:linear">
+      </a-torus>
+    </a-entity>
+  </a-entity>
+
+  <!-- MATERIAL STORAGE SHELVES (right wall) -->
+  <a-entity position="10 2 -8">
+    <!-- Shelf boards -->
+    <a-box position="0 2 0" width="3" height="0.08" depth="1" material="color:#3A2208; roughness:0.75"></a-box>
+    <a-box position="0 0.5 0" width="3" height="0.08" depth="1" material="color:#3A2208; roughness:0.75"></a-box>
+    <a-box position="0 -1 0" width="3" height="0.08" depth="1" material="color:#3A2208; roughness:0.75"></a-box>
+    <!-- Shelf sides -->
+    <a-box position="-1.5 0.5 0" width="0.08" height="4" depth="1" material="color:#2A1808; roughness:0.8"></a-box>
+    <a-box position="1.5 0.5 0" width="0.08" height="4" depth="1" material="color:#2A1808; roughness:0.8"></a-box>
+
+    <!-- Containers on shelves -->
+    <!-- Top shelf: glass jars with crystals -->
+    <a-entity position="-0.8 2.2 0">
+      <a-cylinder radius="0.15" height="0.35"
+        material="transparent:true; opacity:0.4; color:#8BCFD0; metalness:0.1; roughness:0"
+        class="clickable interactive-object" data-item="crystal" data-name="Aether Crystal">
+      </a-cylinder>
+      <a-entity position="0 0.15 0">
+        <a-cone radius="0.08" height="0.2" material="color:#5AEAF0; metalness:0.3; roughness:0.1"
+          animation="property:rotation; from:0 0 0; to:0 360 0; dur:3000; loop:true; easing:linear">
+        </a-cone>
+      </a-entity>
+    </a-entity>
+    <a-cylinder position="0.1 2.2 0" radius="0.14" height="0.3"
+      material="transparent:true; opacity:0.4; color:#D4883A; metalness:0; roughness:0"
+      class="clickable interactive-object" data-item="amber" data-name="Amber Resin">
+    </a-cylinder>
+    <a-cylinder position="0.9 2.2 0" radius="0.13" height="0.28"
+      material="transparent:true; opacity:0.5; color:#4A8A3A; metalness:0; roughness:0"
+      class="clickable interactive-object" data-item="formula" data-name="Green Formula">
+    </a-cylinder>
+
+    <!-- Middle shelf: metal ingots -->
+    <a-box position="-0.8 0.72 0" width="0.25" height="0.18" depth="0.5"
+      material="color:#C8963E; metalness:0.95; roughness:0.1"
+      class="clickable interactive-object" data-item="brass-ingot" data-name="Brass Ingot">
+    </a-box>
+    <a-box position="-0.2 0.72 0" width="0.25" height="0.18" depth="0.5"
+      material="color:#B87333; metalness:0.95; roughness:0.15"
+      class="clickable interactive-object" data-item="copper-ingot" data-name="Copper Ingot">
+    </a-box>
+    <a-box position="0.4 0.72 0" width="0.25" height="0.18" depth="0.5"
+      material="color:#888080; metalness:0.98; roughness:0.05"
+      class="clickable interactive-object" data-item="iron-ingot" data-name="Iron Ingot">
+    </a-box>
+    <a-box position="1.0 0.72 0" width="0.25" height="0.18" depth="0.5"
+      material="color:#D4AF37; metalness:1.0; roughness:0.05"
+      class="clickable interactive-object" data-item="gold-ingot" data-name="Gold Ingot">
+    </a-box>
+
+    <!-- Bottom shelf: coils, springs -->
+    <a-entity position="-0.8 -0.8 0"
+      class="clickable interactive-object" data-item="coil" data-name="Copper Coil">
+      <a-torus radius="0.18" radiusTubular="0.04" material="color:#B87333; metalness:0.9; roughness:0.2"></a-torus>
+    </a-entity>
+    <a-entity position="0 -0.8 0"
+      class="clickable interactive-object" data-item="spring" data-name="Steel Spring">
+      <a-cylinder radius="0.1" height="0.4"
+        material="color:#606870; metalness:0.95; roughness:0.1; wireframe:true"></a-cylinder>
+    </a-entity>
+    <a-sphere position="0.8 -0.78 0" radius="0.16"
+      material="color:#8A2020; metalness:0.3; roughness:0.4; emissive:#8A2020; emissiveIntensity:0.3"
+      class="clickable interactive-object" data-item="power-core" data-name="Power Core">
+      <a-animation attribute="material.emissiveIntensity" from="0.3" to="0.8" dur="1200" dir="alternate" repeat="indefinite"></a-animation>
+    </a-sphere>
+  </a-entity>
+
+  <!-- STEAM FURNACE (back left) -->
+  <a-entity position="-7 0 -11" id="furnace">
+    <!-- Body -->
+    <a-cylinder radius="1.2" height="3.5" position="0 1.75 0"
+      material="color:#3A2A18; metalness:0.7; roughness:0.4">
+    </a-cylinder>
+    <!-- Door -->
+    <a-circle radius="0.5" position="0 1.2 1.21"
+      material="color:#5A3A1A; metalness:0.8; roughness:0.3">
+    </a-circle>
+    <!-- Fire glow inside door -->
+    <a-sphere radius="0.35" position="0 1.2 1.1"
+      material="color:#FF5500; transparent:true; opacity:0.8; emissive:#FF4400; emissiveIntensity:0.9">
+      <a-animation attribute="material.emissiveIntensity" from="0.9" to="0.3" dur="800" dir="alternate" repeat="indefinite"></a-animation>
+      <a-animation attribute="scale" from="1 1 1" to="1.1 1.1 1.1" dur="600" dir="alternate" repeat="indefinite"></a-animation>
+    </a-sphere>
+    <!-- Chimney -->
+    <a-cylinder radius="0.3" height="4" position="0 5.5 0"
+      material="color:#2A1A08; metalness:0.6; roughness:0.5">
+    </a-cylinder>
+    <!-- Pressure gauge -->
+    <a-entity position="0.8 2.5 1.1">
+      <a-circle radius="0.2" material="color:#C8963E; metalness:0.9"></a-circle>
+      <a-box width="0.04" height="0.16" depth="0.02" position="0.05 0.04 0.01"
+        material="color:#FF3300; metalness:0.5"
+        animation="property:rotation; from:0 0 -45; to:0 0 45; dur:2000; dir:alternate; loop:true">
+      </a-box>
+    </a-entity>
+    <!-- Rivets -->
+    <a-sphere radius="0.05" position="0.8 2.0 1.0" material="color:#C8963E; metalness:0.95"></a-sphere>
+    <a-sphere radius="0.05" position="-0.8 2.0 1.0" material="color:#C8963E; metalness:0.95"></a-sphere>
+    <a-sphere radius="0.05" position="0 2.5 1.15" material="color:#C8963E; metalness:0.95"></a-sphere>
+    <!-- Steam puffs point light -->
+    <a-entity light="type:point; color:#FF5500; intensity:1.5; distance:5"
+      position="0 1.2 1.2"
+      animation="property:light.intensity; from:1.5; to:0.5; dur:800; dir:alternate; loop:true">
+    </a-entity>
+  </a-entity>
+
+  <!-- STEAM PIPES along ceiling -->
+  <a-cylinder radius="0.08" height="10" rotation="0 0 90" position="0 8.5 -8"
+    material="color:#5A4020; metalness:0.75; roughness:0.3">
+  </a-cylinder>
+  <a-cylinder radius="0.08" height="8" rotation="90 0 0" position="-5 8.5 -4"
+    material="color:#5A4020; metalness:0.75; roughness:0.3">
+  </a-cylinder>
+  <!-- Pipe joints / valves -->
+  <a-entity position="0 8.5 -8">
+    <a-torus radius="0.1" radiusTubular="0.04" rotation="90 0 0"
+      material="color:#C8963E; metalness:0.9; roughness:0.2">
+    </a-torus>
+    <a-sphere radius="0.12" material="color:#8B5E3C; metalness:0.85; roughness:0.2"></a-sphere>
+  </a-entity>
+  <a-entity position="-5 8.5 -4">
+    <a-sphere radius="0.12" material="color:#C8963E; metalness:0.9; roughness:0.2"></a-sphere>
+  </a-entity>
+  <!-- Pipe steam emission light -->
+  <a-entity light="type:point; color:#AACCDD; intensity:0.3; distance:3" position="0 8.5 -6"></a-entity>
+
+  <!-- BLUEPRINT TABLE -->
+  <a-entity position="5 0 -5">
+    <a-box position="0 0.88 0" width="3" height="0.1" depth="2"
+      material="color:#2A1808; roughness:0.7; metalness:0.1"
+      shadow="receive:true">
+    </a-box>
+    <!-- Blueprint paper -->
+    <a-plane position="0 0.95 0" rotation="-90 5 0" width="2.5" height="1.7"
+      material="color:#1A2A4A; roughness:0.9"
+      class="clickable" data-item="blueprint" data-name="Master Blueprint">
+    </a-plane>
+    <!-- Blueprint lines (grid) -->
+    <a-plane position="0 0.96 0" rotation="-90 5 0" width="2.4" height="1.6"
+      material="color:#2A4A8A; opacity:0.4; transparent:true; wireframe:true">
+    </a-plane>
+    <!-- Hologram projector on blueprint table -->
+    <a-entity position="0 1.2 0" id="holo-projector"
+      animation="property:rotation; from:0 0 0; to:0 360 0; dur:8000; loop:true; easing:linear">
+      <a-cone radius="0.15" height="0.3" position="0 0 0"
+        material="color:#2A7A9A; transparent:true; opacity:0.6; emissive:#1A5A8A; emissiveIntensity:0.8">
+      </a-cone>
+      <a-entity light="type:point; color:#2A9ADA; intensity:0.8; distance:3"></a-entity>
+    </a-entity>
+    <a-box position="-1.3 0.5 0" width="0.08" height="1" depth="0.08" material="color:#2A1808; roughness:0.7"></a-box>
+    <a-box position="1.3 0.5 0" width="0.08" height="1" depth="0.08" material="color:#2A1808; roughness:0.7"></a-box>
+    <a-box position="-1.3 0.5 0.9" width="0.08" height="1" depth="0.08" material="color:#2A1808; roughness:0.7"></a-box>
+    <a-box position="1.3 0.5 0.9" width="0.08" height="1" depth="0.08" material="color:#2A1808; roughness:0.7"></a-box>
+  </a-entity>
+
+  <!-- CRAFTED OBJECTS DISPLAY AREA -->
+  <a-entity id="display-shelf" position="-5 1.4 -11">
+    <a-box width="4" height="0.1" depth="0.6" material="color:#3A2208; roughness:0.7; metalness:0.15"></a-box>
+    <a-box position="0 -0.8 0" width="4" height="0.1" depth="0.6" material="color:#3A2208; roughness:0.7; metalness:0.15"></a-box>
+    <!-- Display stands -->
+    <a-cylinder position="-1.5 0.15 0" radius="0.08" height="0.4" material="color:#C8963E; metalness:0.9; roughness:0.2"></a-cylinder>
+    <a-cylinder position="0 0.15 0" radius="0.08" height="0.4" material="color:#C8963E; metalness:0.9; roughness:0.2"></a-cylinder>
+    <a-cylinder position="1.5 0.15 0" radius="0.08" height="0.4" material="color:#C8963E; metalness:0.9; roughness:0.2"></a-cylinder>
+    <!-- Sample crafted item on stand -->
+    <a-entity position="0 0.45 0" id="display-item-1" class="crafted-display">
+      <a-octahedron radius="0.15"
+        material="color:#C8963E; metalness:1; roughness:0.05; emissive:#C8963E; emissiveIntensity:0.1"
+        animation="property:rotation; from:0 0 0; to:0 360 0; dur:4000; loop:true; easing:linear">
+      </a-octahedron>
+    </a-entity>
+  </a-entity>
+
+  <!-- HANGING LANTERNS -->
+  <a-entity position="-3 7.5 -5">
+    <a-cylinder radius="0.15" height="0.5"
+      material="color:#8B5E3C; metalness:0.75; roughness:0.3">
+    </a-cylinder>
+    <a-sphere radius="0.2" position="0 -0.4 0"
+      material="transparent:true; opacity:0.5; color:#FFB347; emissive:#FF8800; emissiveIntensity:0.6">
+      <a-animation attribute="material.emissiveIntensity" from="0.6" to="0.2" dur="1500" dir="alternate" repeat="indefinite"></a-animation>
+    </a-sphere>
+    <a-entity light="type:point; color:#FF9922; intensity:1.2; distance:6"
+      position="0 -0.4 0"
+      animation="property:light.intensity; from:1.2; to:0.6; dur:1500; dir:alternate; loop:true">
+    </a-entity>
+    <!-- Chain -->
+    <a-cylinder radius="0.01" height="2" material="color:#6A5040; metalness:0.7" position="0 1.3 0"></a-cylinder>
+  </a-entity>
+  <a-entity position="3 7.5 -3">
+    <a-cylinder radius="0.15" height="0.5" material="color:#8B5E3C; metalness:0.75; roughness:0.3"></a-cylinder>
+    <a-sphere radius="0.2" position="0 -0.4 0"
+      material="transparent:true; opacity:0.5; color:#FFB347; emissive:#FF8800; emissiveIntensity:0.5">
+      <a-animation attribute="material.emissiveIntensity" from="0.5" to="0.1" dur="1200" dir="alternate" repeat="indefinite"></a-animation>
+    </a-sphere>
+    <a-entity light="type:point; color:#FF9922; intensity:1.0; distance:5"
+      position="0 -0.4 0"
+      animation="property:light.intensity; from:1.0; to:0.4; dur:1200; dir:alternate; loop:true">
+    </a-entity>
+    <a-cylinder radius="0.01" height="2" material="color:#6A5040; metalness:0.7" position="0 1.3 0"></a-cylinder>
+  </a-entity>
+
+  <!-- TESLA-STYLE COIL (back right) -->
+  <a-entity position="8 0 -10" id="tesla-coil">
+    <a-cylinder radius="0.15" height="3" position="0 1.5 0"
+      material="color:#4A3018; metalness:0.7; roughness:0.4">
+    </a-cylinder>
+    <a-entity position="0 3.2 0">
+      <a-torus radius="0.4" radiusTubular="0.05"
+        material="color:#B87333; metalness:0.95; roughness:0.1"
+        animation="property:rotation; from:0 0 0; to:0 360 0; dur:2000; loop:true; easing:linear">
+      </a-torus>
+      <a-sphere radius="0.25"
+        material="color:#8ACFFF; transparent:true; opacity:0.7; emissive:#2A8AFF; emissiveIntensity:0.8">
+        <a-animation attribute="material.emissiveIntensity" from="0.8" to="0.2" dur="400" dir="alternate" repeat="indefinite"></a-animation>
+      </a-sphere>
+      <a-entity light="type:point; color:#4AADFF; intensity:1.5; distance:8"
+        animation="property:light.intensity; from:1.5; to:0.3; dur:400; dir:alternate; loop:true">
+      </a-entity>
+    </a-entity>
+  </a-entity>
+
+  <!-- MISC FLOOR OBJECTS -->
+  <!-- Crate stack -->
+  <a-entity position="-9 0 -3">
+    <a-box width="1" height="0.8" depth="0.8" position="0 0.4 0"
+      material="color:#3A2208; roughness:0.85; metalness:0.05">
+    </a-box>
+    <a-box width="0.9" height="0.8" depth="0.8" position="0.1 1.2 0.05"
+      material="color:#2A1A08; roughness:0.85; metalness:0.05">
+    </a-box>
+    <!-- Metal strap on crate -->
+    <a-box width="1.02" height="0.06" depth="0.85" position="0 0.6 0"
+      material="color:#8B5E3C; metalness:0.8; roughness:0.2">
+    </a-box>
+  </a-entity>
+
+  <!-- Small barrel -->
+  <a-entity position="9 0 -2">
+    <a-cylinder radius="0.35" height="0.9" position="0 0.45 0"
+      material="color:#3A2208; roughness:0.8; metalness:0.1">
+    </a-cylinder>
+    <a-torus radius="0.37" radiusTubular="0.03" rotation="90 0 0" position="0 0.7 0"
+      material="color:#8B5E3C; metalness:0.8; roughness:0.2">
+    </a-torus>
+    <a-torus radius="0.37" radiusTubular="0.03" rotation="90 0 0" position="0 0.2 0"
+      material="color:#8B5E3C; metalness:0.8; roughness:0.2">
+    </a-torus>
+  </a-entity>
+
+  <!-- CAMERA RIG -->
+  <a-entity id="camera-rig" position="0 1.6 2">
+    <a-camera id="main-camera"
+      look-controls="reverseMouseDrag:false; pointerLockEnabled:true"
+      wasd-controls="acceleration:15"
+      fov="75"
+      near="0.1" far="200">
+      <!-- Crosshair / reticle -->
+      <a-entity position="0 0 -1">
+        <a-ring radius-inner="0.005" radius-outer="0.012"
+          color="#C8963E" opacity="0.5" material="shader:flat">
+        </a-ring>
+        <a-circle radius="0.003" color="#C8963E" opacity="0.8" material="shader:flat"></a-circle>
+      </a-entity>
+    </a-camera>
+
+    <!-- VR Controllers -->
+    <a-entity id="left-hand"
+      laser-controls="hand:left"
+      raycaster="objects:.clickable; far:10; showLine:true; lineColor:#C8963E; lineOpacity:0.7">
+    </a-entity>
+    <a-entity id="right-hand"
+      laser-controls="hand:right"
+      raycaster="objects:.clickable; far:10; showLine:true; lineColor:#FFB347; lineOpacity:0.7">
+    </a-entity>
+  </a-entity>
+
+  <!-- CLICKABLE WORKBENCH CURSOR RAYCASTER -->
+  <a-entity cursor="fuse:false; rayOrigin:mouse"
+    raycaster="objects:.clickable; far:20">
+  </a-entity>
+
+</a-scene>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-corner hud-tl"></div>
+  <div class="hud-corner hud-tr"></div>
+  <div class="hud-corner hud-bl"></div>
+  <div class="hud-corner hud-br"></div>
+  <div class="hud-header">
+    <div class="hud-title">⚙ ÆTHERFORGE</div>
+    <div id="hud-status" class="hud-mode">WORKSHOP MODE</div>
+  </div>
+  <div class="hud-bottom">
+    <div style="font-family:'Cutive Mono',monospace;font-size:0.55rem;color:var(--steam);opacity:0.5;">
+      <span id="fps-counter">60 FPS</span> &nbsp;|&nbsp; <span id="obj-count">0 OBJECTS</span>
+    </div>
+    <div style="font-family:'Cutive Mono',monospace;font-size:0.55rem;color:var(--steam);opacity:0.5;">
+      CLICK OBJECTS TO INSPECT &nbsp;|&nbsp; WASD + MOUSE
+    </div>
+  </div>
+</div>
+
+<!-- INVENTORY PANEL -->
+<div id="inventory-panel">
+  <div class="panel-title">Materials</div>
+
+  <div class="mat-category">
+    <div class="cat-label">Metals</div>
+    <div class="mat-grid" id="metals-grid">
+      <div class="mat-item unlimited" draggable="true" data-material="brass" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔶</span>
+        <span class="mat-name">Brass</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="copper" ondragstart="dragMat(event)">
+        <span class="mat-icon">🟤</span>
+        <span class="mat-name">Copper</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="iron" ondragstart="dragMat(event)">
+        <span class="mat-icon">⚫</span>
+        <span class="mat-name">Iron</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="gold" ondragstart="dragMat(event)">
+        <span class="mat-icon">🟡</span>
+        <span class="mat-name">Gold</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="steel" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔘</span>
+        <span class="mat-name">Steel</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="silver" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔵</span>
+        <span class="mat-name">Silver</span>
+        <span class="mat-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mat-category">
+    <div class="cat-label">Alchemical</div>
+    <div class="mat-grid">
+      <div class="mat-item unlimited" draggable="true" data-material="crystal" ondragstart="dragMat(event)">
+        <span class="mat-icon">💎</span>
+        <span class="mat-name">Crystal</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="aether" ondragstart="dragMat(event)">
+        <span class="mat-icon">🌀</span>
+        <span class="mat-name">Aether</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="sulfur" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔥</span>
+        <span class="mat-name">Sulfur</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="quicksilver" ondragstart="dragMat(event)">
+        <span class="mat-icon">💠</span>
+        <span class="mat-name">Quicksilver</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="amber" ondragstart="dragMat(event)">
+        <span class="mat-icon">🟠</span>
+        <span class="mat-name">Amber</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="void-shard" ondragstart="dragMat(event)">
+        <span class="mat-icon">⚫</span>
+        <span class="mat-name">Void Shard</span>
+        <span class="mat-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mat-category">
+    <div class="cat-label">Mechanical</div>
+    <div class="mat-grid">
+      <div class="mat-item unlimited" draggable="true" data-material="gear" ondragstart="dragMat(event)">
+        <span class="mat-icon">⚙️</span>
+        <span class="mat-name">Gear</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="spring" ondragstart="dragMat(event)">
+        <span class="mat-icon">🌀</span>
+        <span class="mat-name">Spring</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="coil" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔁</span>
+        <span class="mat-name">Coil</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="valve" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔩</span>
+        <span class="mat-name">Valve</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="lens" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔍</span>
+        <span class="mat-name">Lens</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="piston" ondragstart="dragMat(event)">
+        <span class="mat-icon">⬛</span>
+        <span class="mat-name">Piston</span>
+        <span class="mat-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="mat-category">
+    <div class="cat-label">Organic & Exotic</div>
+    <div class="mat-grid">
+      <div class="mat-item unlimited" draggable="true" data-material="wood" ondragstart="dragMat(event)">
+        <span class="mat-icon">🪵</span>
+        <span class="mat-name">Oak Wood</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="rubber" ondragstart="dragMat(event)">
+        <span class="mat-icon">⚫</span>
+        <span class="mat-name">Rubber</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="leather" ondragstart="dragMat(event)">
+        <span class="mat-icon">🟫</span>
+        <span class="mat-name">Leather</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="bone" ondragstart="dragMat(event)">
+        <span class="mat-icon">🦴</span>
+        <span class="mat-name">Bone</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="chimera-scale" ondragstart="dragMat(event)">
+        <span class="mat-icon">🟢</span>
+        <span class="mat-name">Chimera Scale</span>
+        <span class="mat-count"></span>
+      </div>
+      <div class="mat-item unlimited" draggable="true" data-material="dragon-gem" ondragstart="dragMat(event)">
+        <span class="mat-icon">🔴</span>
+        <span class="mat-name">Dragon Gem</span>
+        <span class="mat-count"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toggle button -->
+  <button onclick="togglePanel('inventory-panel')" style="
+    position:absolute; right:-28px; top:50%; transform:translateY(-50%);
+    background:rgba(13,10,6,0.95); border:1px solid rgba(200,150,62,0.3);
+    color:var(--brass); width:28px; height:48px; cursor:pointer;
+    font-size:0.7rem; border-radius:0 3px 3px 0;
+    font-family:'Cutive Mono',monospace; writing-mode:vertical-rl;">
+    ◀
+  </button>
+</div>
+
+<!-- CRAFTING PANEL -->
+<div id="crafting-panel">
+  <div class="panel-title" style="font-family:'Playfair Display',serif; font-size:0.85rem;">Formularium</div>
+  <div style="font-family:'Cutive Mono',monospace; font-size:0.55rem; color:var(--steam); opacity:0.5; margin-bottom:1rem; letter-spacing:0.2em;">
+    SELECT RECIPE → ASSIGN MATERIALS → FORGE
+  </div>
+  <div class="recipe-grid" id="recipe-grid"></div>
+
+  <div style="margin-top:1.5rem; border-top:1px solid rgba(200,150,62,0.15); padding-top:1rem;">
+    <div class="cat-label">Active Forge Queue</div>
+    <div id="forge-queue" style="font-family:'Cutive Mono',monospace; font-size:0.6rem; color:var(--steam); opacity:0.5; margin-top:0.5rem;">
+      — No items queued —
+    </div>
+  </div>
+
+  <button onclick="togglePanel('crafting-panel')" style="
+    position:absolute; left:-28px; top:50%; transform:translateY(-50%);
+    background:rgba(13,10,6,0.95); border:1px solid rgba(200,150,62,0.3);
+    color:var(--brass); width:28px; height:48px; cursor:pointer;
+    font-size:0.7rem; border-radius:3px 0 0 3px;
+    font-family:'Cutive Mono',monospace; writing-mode:vertical-rl;">
+    ▶
+  </button>
+</div>
+
+<!-- WORKBENCH 3D VIEW -->
+<div id="workbench-view" class="hidden">
+  <div class="wb-header">
+    <span class="wb-title">⚗ Fabrication Chamber</span>
+    <button class="wb-close" onclick="toggleWorkbench()">✕</button>
+  </div>
+  <canvas id="workbench-canvas"></canvas>
+</div>
+
+<!-- TOOLBAR -->
+<div id="toolbar">
+  <button class="tool-btn active" id="btn-workshop" onclick="setMode('workshop')">
+    <span class="t-icon">🔨</span>Workshop
+  </button>
+  <button class="tool-btn" id="btn-fabricate" onclick="setMode('fabricate')">
+    <span class="t-icon">⚙</span>Fabricate
+  </button>
+  <button class="tool-btn" id="btn-inspect" onclick="setMode('inspect')">
+    <span class="t-icon">🔍</span>Inspect
+  </button>
+  <button class="tool-btn" id="btn-assemble" onclick="setMode('assemble')">
+    <span class="t-icon">🔧</span>Assemble
+  </button>
+  <button class="tool-btn" id="btn-test" onclick="setMode('test')">
+    <span class="t-icon">⚡</span>Test Run
+  </button>
+  <button class="tool-btn" id="btn-save" onclick="saveWorkshop()">
+    <span class="t-icon">💾</span>Archive
+  </button>
+</div>
+
+<!-- VR BUTTON -->
+<button id="vr-btn" onclick="enterVR()">⬡ ENTER VR</button>
+
+<!-- NOTIFICATION -->
+<div id="notif"></div>
+
+<!-- INSPECT POPUP -->
+<div id="inspect-popup">
+  <div class="inspect-title" id="inspect-name">Brass Ingot</div>
+  <div class="inspect-sub" id="inspect-type">ALLOY · TIER II MATERIAL</div>
+  <div class="inspect-stats" id="inspect-stats"></div>
+  <div class="inspect-actions">
+    <button class="inspect-btn primary" onclick="addToForge()">+ Add to Forge</button>
+    <button class="inspect-btn" onclick="examineObject()">Examine</button>
+    <button class="inspect-btn" onclick="closeInspect()">✕ Close</button>
+  </div>
+</div>
+
+<!-- DROP ZONE -->
+<div id="drop-zone"
+  ondragover="dragOver(event)"
+  ondragleave="dragLeave(event)"
+  ondrop="dropMat(event)">
+  <div class="drop-label">CRAFTING TABLE — DROP MATERIALS</div>
+  <div class="drop-slots" id="drop-slots">
+    <div class="drop-slot" id="slot-0">+</div>
+    <div class="drop-slot" id="slot-1">+</div>
+    <div class="drop-slot" id="slot-2">+</div>
+    <div class="drop-slot" id="slot-3">+</div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// ÆTHERFORGE VR WORKSHOP — CORE ENGINE
+// ═══════════════════════════════════════════
+
+const RECIPES = [
+  {
+    id: 'steam-pistol', name: 'Steam Pistol',
+    desc: 'A brass-barreled sidearm powered by compressed steam pressure.',
+    icon: '🔫', tier: 'III',
+    materials: ['brass', 'iron', 'spring', 'valve', 'leather'],
+    stats: { Power: 78, Precision: 65, Durability: 90, Rarity: 60 },
+    category: 'Weapons'
+  },
+  {
+    id: 'aether-compass', name: 'Aether Compass',
+    desc: 'Navigates the invisible currents of aetheric energy.',
+    icon: '🧭', tier: 'II',
+    materials: ['brass', 'crystal', 'aether', 'lens'],
+    stats: { Accuracy: 95, Range: 88, Sensitivity: 72, Rarity: 75 },
+    category: 'Instruments'
+  },
+  {
+    id: 'clockwork-heart', name: 'Clockwork Heart',
+    desc: 'The mechanical heart of an automaton. Ticks with perfect rhythm.',
+    icon: '❤️', tier: 'IV',
+    materials: ['gold', 'crystal', 'spring', 'coil', 'aether', 'quicksilver'],
+    stats: { Efficiency: 99, Durability: 85, Magic: 88, Rarity: 95 },
+    category: 'Components'
+  },
+  {
+    id: 'voltaic-gauntlet', name: 'Voltaic Gauntlet',
+    desc: 'Channels lightning through brass knuckles and copper conduit.',
+    icon: '⚡', tier: 'III',
+    materials: ['copper', 'coil', 'crystal', 'leather', 'rubber'],
+    stats: { Power: 92, Control: 55, Durability: 70, Rarity: 80 },
+    category: 'Armor'
+  },
+  {
+    id: 'alchemist-lens', name: "Alchemist's Lens",
+    desc: 'Reveals hidden properties of materials and living beings.',
+    icon: '🔭', tier: 'II',
+    materials: ['crystal', 'silver', 'brass', 'lens'],
+    stats: { Vision: 95, Clarity: 88, Range: 60, Rarity: 55 },
+    category: 'Instruments'
+  },
+  {
+    id: 'phoenix-cannon', name: 'Phoenix Cannon',
+    desc: 'A devastatingly ornate cannon fueled by dragon gem resonance.',
+    icon: '💥', tier: 'V',
+    materials: ['dragon-gem', 'gold', 'brass', 'coil', 'sulfur', 'steel'],
+    stats: { Power: 100, Range: 90, Destruction: 97, Rarity: 100 },
+    category: 'Weapons'
+  },
+  {
+    id: 'chrono-pocket-watch', name: 'Chrono-Watch',
+    desc: 'Keeps perfect time across dimensions. May bend causality.',
+    icon: '⏱️', tier: 'III',
+    materials: ['gold', 'spring', 'crystal', 'leather', 'quicksilver'],
+    stats: { Precision: 100, Temporal: 78, Luxury: 92, Rarity: 85 },
+    category: 'Instruments'
+  },
+  {
+    id: 'steam-golem-core', name: 'Golem Core',
+    desc: 'Animates a full steam golem. Handle with extreme caution.',
+    icon: '🤖', tier: 'V',
+    materials: ['iron', 'brass', 'copper', 'aether', 'clockwork-heart', 'chimera-scale'],
+    stats: { Power: 98, Obedience: 65, Durability: 100, Rarity: 100 },
+    category: 'Arcane'
+  },
+  {
+    id: 'void-lantern', name: 'Void Lantern',
+    desc: 'Burns void-shard fuel to illuminate the unseen spectrum.',
+    icon: '🏮', tier: 'IV',
+    materials: ['void-shard', 'brass', 'crystal', 'silver', 'aether'],
+    stats: { Illumination: 100, Range: 88, Mysticism: 95, Rarity: 90 },
+    category: 'Arcane'
+  },
+  {
+    id: 'bone-automaton', name: 'Bone Automaton',
+    desc: 'Ossified clockwork familiar. Ancient and utterly loyal.',
+    icon: '💀', tier: 'IV',
+    materials: ['bone', 'spring', 'copper', 'amber', 'gear'],
+    stats: { Speed: 82, Loyalty: 100, Stealth: 75, Rarity: 88 },
+    category: 'Familiars'
+  },
+  {
+    id: 'steam-jetpack', name: 'Steam Jetpack',
+    desc: 'Dual-boiler thrust harness for vertical mobility.',
+    icon: '🚀', tier: 'III',
+    materials: ['iron', 'copper', 'valve', 'rubber', 'leather', 'piston'],
+    stats: { Thrust: 85, Duration: 60, Safety: 50, Rarity: 70 },
+    category: 'Armor'
+  },
+  {
+    id: 'arcane-codex', name: 'Arcane Codex',
+    desc: 'Bound in chimera-scale, this tome records alchemical formulae.',
+    icon: '📕', tier: 'II',
+    materials: ['chimera-scale', 'wood', 'gold', 'aether'],
+    stats: { Knowledge: 100, Portability: 80, Durability: 70, Rarity: 65 },
+    category: 'Instruments'
+  },
+];
+
+// ── STATE ──
+let currentMode = 'workshop';
+let draggedMaterial = null;
+let craftingSlots = [null, null, null, null];
+let objectCount = 0;
+let selectedObject = null;
+let forgeQueue = [];
+let wbScene, wbRenderer, wbCamera, wbObjectMeshes = [];
+let frameCount = 0, lastFPS = 0, lastTime = performance.now();
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', () => {
+  initParticles();
+  buildRecipes();
+  initWorkbenchRenderer();
+  simulateLoading();
+  hookSceneClicks();
+  animateHUD();
+  initDropZone();
+});
+
+function simulateLoading() {
+  const statuses = [
+    'Calibrating steam pressure...',
+    'Initialising aetheric field...',
+    'Loading material database...',
+    'Compiling shader programs...',
+    'Generating workshop geometry...',
+    'Igniting furnace...',
+    'Workshop ready.'
+  ];
+  let i = 0;
+  const el = document.getElementById('load-status');
+  const interval = setInterval(() => {
+    if (i < statuses.length) el.textContent = statuses[i++];
+    else {
+      clearInterval(interval);
+      setTimeout(() => {
+        document.getElementById('loading-screen').classList.add('fade-out');
+        setTimeout(() => {
+          document.getElementById('loading-screen').style.display = 'none';
+        }, 1000);
+      }, 400);
+    }
+  }, 350);
+}
+
+// ── PARTICLES ──
+function initParticles() {
+  const container = document.getElementById('particles');
+  for (let i = 0; i < 25; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.cssText = `
+      left: ${Math.random()*100}%;
+      animation-duration: ${6 + Math.random()*12}s;
+      animation-delay: ${Math.random()*8}s;
+      width: ${2 + Math.random()*5}px;
+      height: ${2 + Math.random()*5}px;
+      --drift: ${(Math.random()-0.5)*200}px;
+      opacity: ${0.05 + Math.random()*0.15};
+    `;
+    container.appendChild(p);
+  }
+}
+
+// ── RECIPES ──
+function buildRecipes() {
+  const grid = document.getElementById('recipe-grid');
+  grid.innerHTML = '';
+
+  const categories = [...new Set(RECIPES.map(r => r.category))];
+  categories.forEach(cat => {
+    const catItems = RECIPES.filter(r => r.category === cat);
+    const header = document.createElement('div');
+    header.className = 'cat-label';
+    header.style.marginBottom = '6px';
+    header.textContent = cat;
+    grid.appendChild(header);
+
+    catItems.forEach(recipe => {
+      const card = document.createElement('div');
+      card.className = 'recipe-card';
+      card.dataset.recipe = recipe.id;
+      card.innerHTML = `
+        <div class="recipe-name">${recipe.icon} ${recipe.name} <span style="font-size:0.5rem;color:var(--copper);opacity:0.7">· TIER ${recipe.tier}</span></div>
+        <div class="recipe-desc">${recipe.desc}</div>
+        <div class="recipe-mats">${recipe.materials.map(m=>`<span class="recipe-mat-tag">${m}</span>`).join('')}</div>
+        <button class="craft-btn" onclick="craftItem('${recipe.id}')">⚒ Forge Now</button>
+      `;
+      card.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'BUTTON') selectRecipe(recipe);
+      });
+      grid.appendChild(card);
+    });
+  });
+}
+
+function selectRecipe(recipe) {
+  craftingSlots = recipe.materials.slice(0, 4).map(m => m);
+  updateDropSlots();
+  notify(`Recipe loaded: ${recipe.name}`);
+}
+
+function craftItem(recipeId) {
+  const recipe = RECIPES.find(r => r.id === recipeId);
+  if (!recipe) return;
+
+  const card = document.querySelector(`[data-recipe="${recipeId}"]`);
+  card.classList.add('crafting-active');
+  notify(`⚒ Forging ${recipe.name}...`);
+
+  // Add to queue
+  forgeQueue.push({ recipe, progress: 0 });
+  updateForgeQueue();
+
+  // Simulate crafting delay
+  setTimeout(() => {
+    card.classList.remove('crafting-active');
+    spawnCraftedObject(recipe);
+    forgeQueue = forgeQueue.filter(q => q.recipe.id !== recipeId);
+    updateForgeQueue();
+    notify(`✓ ${recipe.name} forged successfully!`);
+    objectCount++;
+    document.getElementById('obj-count').textContent = objectCount + ' OBJECTS';
+  }, 2500 + Math.random() * 1500);
+}
+
+function updateForgeQueue() {
+  const el = document.getElementById('forge-queue');
+  if (forgeQueue.length === 0) {
+    el.innerHTML = '— No items queued —';
+    el.style.opacity = '0.5';
+    return;
+  }
+  el.style.opacity = '1';
+  el.innerHTML = forgeQueue.map(q =>
+    `<div style="margin-bottom:4px;color:var(--amber);">⚒ ${q.recipe.name} <span style="color:var(--copper)">forging...</span></div>`
+  ).join('');
+}
+
+// ── SPAWN 3D OBJECT ──
+function spawnCraftedObject(recipe) {
+  const scene = document.getElementById('main-scene');
+  const x = (Math.random() - 0.5) * 4;
+  const z = -4 - Math.random() * 2;
+
+  const entityColors = {
+    'steam-pistol': '#C8963E',
+    'aether-compass': '#5AEAF0',
+    'clockwork-heart': '#FF6B6B',
+    'voltaic-gauntlet': '#FFB347',
+    'alchemist-lens': '#8BCFD0',
+    'phoenix-cannon': '#FF4400',
+    'chrono-pocket-watch': '#D4AF37',
+    'steam-golem-core': '#6A8A6A',
+    'void-lantern': '#8A2090',
+    'bone-automaton': '#E8DCC8',
+    'steam-jetpack': '#8B5E3C',
+    'arcane-codex': '#2A6070',
+  };
+  const color = entityColors[recipe.id] || '#C8963E';
+
+  const entity = document.createElement('a-entity');
+  entity.setAttribute('position', `${x} 1.2 ${z}`);
+  entity.setAttribute('class', 'clickable interactive-object crafted-item');
+  entity.setAttribute('data-item', recipe.id);
+  entity.setAttribute('data-name', recipe.name);
+  entity.setAttribute('animation__hover', 'property:position; to:' + x + ' 1.4 ' + z + '; dur:1500; dir:alternate; loop:true; easing:sinusoidalInOut');
+  entity.setAttribute('animation__spin', 'property:rotation; from:0 0 0; to:0 360 0; dur:6000; loop:true; easing:linear');
+
+  // Shape based on type
+  const inner = document.createElement('a-octahedron');
+  inner.setAttribute('radius', '0.12');
+  inner.setAttribute('material', `color:${color}; metalness:0.9; roughness:0.1; emissive:${color}; emissiveIntensity:0.3`);
+  entity.appendChild(inner);
+
+  // Glow point light
+  const light = document.createElement('a-entity');
+  light.setAttribute('light', `type:point; color:${color}; intensity:0.5; distance:3`);
+  entity.appendChild(light);
+
+  scene.appendChild(entity);
+
+  // Also add to workbench miniview
+  addToWorkbenchView(recipe, color);
+}
+
+// ── WORKBENCH MINI RENDERER ──
+function initWorkbenchRenderer() {
+  const canvas = document.getElementById('workbench-canvas');
+  const W = 500, H = 270;
+  canvas.width = W; canvas.height = H;
+
+  wbRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  wbRenderer.setSize(W, H);
+  wbRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  wbRenderer.shadowMap.enabled = true;
+  wbRenderer.toneMapping = THREE.ACESFilmicToneMapping;
+  wbRenderer.outputEncoding = THREE.sRGBEncoding;
+
+  wbScene = new THREE.Scene();
+  wbScene.background = new THREE.Color(0x060402);
+  wbScene.fog = new THREE.Fog(0x060402, 8, 20);
+
+  wbCamera = new THREE.PerspectiveCamera(55, W / H, 0.1, 100);
+  wbCamera.position.set(0, 1.5, 4);
+  wbCamera.lookAt(0, 0, 0);
+
+  // Lighting
+  const amb = new THREE.AmbientLight(0x3A2810, 0.8);
+  wbScene.add(amb);
+  const pl1 = new THREE.PointLight(0xD4883A, 3, 10);
+  pl1.position.set(0, 4, 0);
+  wbScene.add(pl1);
+  const pl2 = new THREE.PointLight(0x2A6090, 1.5, 8);
+  pl2.position.set(-3, 2, -2);
+  wbScene.add(pl2);
+
+  // Grid floor
+  const grid = new THREE.GridHelper(10, 20, 0x3A2808, 0x1A1006);
+  wbScene.add(grid);
+
+  // Bench surface
+  const benchGeo = new THREE.BoxGeometry(4, 0.1, 2);
+  const benchMat = new THREE.MeshStandardMaterial({ color: 0x2A1408, roughness: 0.8, metalness: 0.1 });
+  const bench = new THREE.Mesh(benchGeo, benchMat);
+  bench.position.set(0, 0, 0);
+  bench.receiveShadow = true;
+  wbScene.add(bench);
+
+  // Metal edge
+  const edgeGeo = new THREE.BoxGeometry(4.02, 0.02, 0.02);
+  const edgeMat = new THREE.MeshStandardMaterial({ color: 0xC8963E, metalness: 0.95, roughness: 0.1 });
+  const edge = new THREE.Mesh(edgeGeo, edgeMat);
+  edge.position.set(0, 0.06, 1.01);
+  wbScene.add(edge);
+
+  // Gear decorations
+  const gearGeo = new THREE.TorusGeometry(0.3, 0.04, 8, 16);
+  const gearMat = new THREE.MeshStandardMaterial({ color: 0xC8963E, metalness: 0.95, roughness: 0.15 });
+  const gear1 = new THREE.Mesh(gearGeo, gearMat);
+  gear1.position.set(-1.5, 0.12, 0.5);
+  gear1.rotation.x = Math.PI / 2;
+  wbScene.add(gear1);
+  wbObjectMeshes.push({ mesh: gear1, type: 'gear' });
+
+  const gear2 = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 8, 12), gearMat.clone());
+  gear2.material.color.set(0xB87333);
+  gear2.position.set(-0.8, 0.12, 0.5);
+  gear2.rotation.x = Math.PI / 2;
+  wbScene.add(gear2);
+  wbObjectMeshes.push({ mesh: gear2, type: 'gear', speed: -1.5 });
+
+  // Animate
+  function animateWB(t) {
+    requestAnimationFrame(animateWB);
+    const dt = t * 0.001;
+    wbObjectMeshes.forEach(obj => {
+      if (obj.type === 'gear') {
+        obj.mesh.rotation.z += (obj.speed || 0.8) * 0.01;
+      } else if (obj.type === 'crafted') {
+        obj.mesh.rotation.y += 0.01;
+        obj.mesh.position.y = 0.3 + Math.sin(dt * 2 + obj.offset) * 0.05;
+      }
+    });
+    wbRenderer.render(wbScene, wbCamera);
+  }
+  animateWB(0);
+}
+
+function addToWorkbenchView(recipe, color) {
+  if (!wbScene) return;
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color),
+    metalness: 0.9, roughness: 0.1,
+    emissive: new THREE.Color(color), emissiveIntensity: 0.2
+  });
+  const geo = new THREE.OctahedronGeometry(0.12);
+  const mesh = new THREE.Mesh(geo, mat);
+  const count = wbObjectMeshes.filter(o => o.type === 'crafted').length;
+  mesh.position.set(-1.4 + count * 0.7, 0.3, 0);
+  mesh.castShadow = true;
+  wbScene.add(mesh);
+  wbObjectMeshes.push({ mesh, type: 'crafted', offset: count * 1.2 });
+
+  // Light
+  const pl = new THREE.PointLight(new THREE.Color(color), 0.5, 2);
+  pl.position.copy(mesh.position);
+  wbScene.add(pl);
+}
+
+// ── SCENE CLICK INTERACTIONS ──
+function hookSceneClicks() {
+  const scene = document.getElementById('main-scene');
+  scene.addEventListener('click', (e) => {
+    const el = e.target;
+    if (el.classList.contains('interactive-object') || el.classList.contains('clickable')) {
+      const item = el.dataset.item;
+      const name = el.dataset.name || item;
+      if (item) openInspect(item, name);
+    }
+  });
+}
+
+// ── INSPECT ──
+const ITEM_DATA = {
+  'wrench': { type:'TOOL · TIER I', stats:{ Weight:45, Durability:80, Torque:70, Rarity:20 }},
+  'hammer': { type:'TOOL · TIER II', stats:{ Weight:80, Force:90, Durability:85, Rarity:25 }},
+  'brass-ingot': { type:'ALLOY · TIER II', stats:{ Purity:85, Hardness:60, Conductivity:70, Rarity:30 }},
+  'copper-ingot': { type:'METAL · TIER I', stats:{ Purity:90, Conductivity:95, Ductility:80, Rarity:20 }},
+  'iron-ingot': { type:'METAL · TIER I', stats:{ Hardness:80, Durability:90, Magnetism:60, Rarity:15 }},
+  'gold-ingot': { type:'PRECIOUS METAL · TIER III', stats:{ Purity:99, Conductivity:88, Luster:100, Rarity:75 }},
+  'crystal': { type:'ALCHEMICAL · TIER II', stats:{ Clarity:90, Energy:75, Resonance:80, Rarity:60 }},
+  'amber': { type:'ORGANIC · TIER II', stats:{ Age:85, Clarity:70, Preservative:90, Rarity:55 }},
+  'formula': { type:'COMPOUND · TIER III', stats:{ Potency:85, Stability:60, Complexity:80, Rarity:70 }},
+  'power-core': { type:'ARCANE · TIER IV', stats:{ Energy:100, Stability:55, Output:90, Rarity:90 }},
+  'coil': { type:'COMPONENT · TIER I', stats:{ Turns:80, Resistance:50, Gauge:60, Rarity:15 }},
+  'spring': { type:'COMPONENT · TIER I', stats:{ Tension:75, Flexibility:80, Tempering:70, Rarity:15 }},
+  'blueprint': { type:'SCHEMATIC · MASTER', stats:{ Complexity:100, Accuracy:100, Age:80, Rarity:95 }},
+  'workbench': { type:'WORKSHOP FIXTURE', stats:{ Stability:100, Size:90, Wear:60, Rarity:5 }},
+};
+
+function openInspect(item, name) {
+  const data = ITEM_DATA[item] || { type: 'OBJECT · UNKNOWN', stats: { Mystery: 100, Rarity: 50 }};
+  document.getElementById('inspect-name').textContent = name || item;
+  document.getElementById('inspect-type').textContent = data.type;
+  const statsEl = document.getElementById('inspect-stats');
+  statsEl.innerHTML = Object.entries(data.stats).map(([k,v]) => `
+    <div>
+      <div class="stat-row"><span class="stat-key">${k}</span><span class="stat-val">${v}</span></div>
+      <div class="stat-bar"><div class="stat-fill" style="width:${v}%"></div></div>
+    </div>
+  `).join('');
+  selectedObject = { item, name };
+  document.getElementById('inspect-popup').classList.add('show');
+}
+
+function closeInspect() { document.getElementById('inspect-popup').classList.remove('show'); }
+
+function addToForge() {
+  if (!selectedObject) return;
+  notify(`${selectedObject.name} added to forge queue`);
+  closeInspect();
+}
+
+function examineObject() {
+  if (!selectedObject) return;
+  notify(`Examining ${selectedObject.name}... Analysis complete.`);
+  toggleWorkbench(true);
+  closeInspect();
+}
+
+// ── DRAG & DROP ──
+function dragMat(event) {
+  draggedMaterial = event.currentTarget.dataset.material;
+  event.dataTransfer.effectAllowed = 'copy';
+  event.dataTransfer.setData('text/plain', draggedMaterial);
+}
+
+function initDropZone() {
+  const dz = document.getElementById('drop-zone');
+  dz.addEventListener('dragover', dragOver);
+  dz.addEventListener('dragleave', dragLeave);
+  dz.addEventListener('drop', dropMat);
+}
+
+function dragOver(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.add('drag-over');
+}
+function dragLeave() {
+  document.getElementById('drop-zone').classList.remove('drag-over');
+}
+function dropMat(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag-over');
+  const mat = draggedMaterial || e.dataTransfer.getData('text/plain');
+  if (!mat) return;
+  const emptySlot = craftingSlots.findIndex(s => s === null);
+  if (emptySlot === -1) {
+    notify('Crafting table full — clear slots first');
+    return;
+  }
+  craftingSlots[emptySlot] = mat;
+  updateDropSlots();
+  notify(`${mat} placed in slot ${emptySlot + 1}`);
+  autoDetectRecipe();
+}
+
+function updateDropSlots() {
+  const ICONS = {
+    brass:'🔶', copper:'🟤', iron:'⚫', gold:'🟡', steel:'🔘', silver:'🔵',
+    crystal:'💎', aether:'🌀', sulfur:'🔥', quicksilver:'💠', amber:'🟠',
+    'void-shard':'⚫', gear:'⚙️', spring:'🌀', coil:'🔁', valve:'🔩',
+    lens:'🔍', piston:'⬛', wood:'🪵', rubber:'⚫', leather:'🟫',
+    bone:'🦴', 'chimera-scale':'🟢', 'dragon-gem':'🔴',
+  };
+  craftingSlots.forEach((mat, i) => {
+    const slot = document.getElementById('slot-' + i);
+    if (!slot) return;
+    if (mat) {
+      slot.textContent = ICONS[mat] || '▪';
+      slot.classList.add('filled');
+      slot.title = mat;
+      slot.onclick = () => clearSlot(i);
+    } else {
+      slot.textContent = '+';
+      slot.classList.remove('filled');
+      slot.onclick = null;
+    }
+  });
+}
+
+function clearSlot(i) {
+  craftingSlots[i] = null;
+  updateDropSlots();
+}
+
+function autoDetectRecipe() {
+  const filled = craftingSlots.filter(Boolean);
+  const match = RECIPES.find(r => {
+    const has = filled.every(m => r.materials.includes(m));
+    return has && filled.length >= 2;
+  });
+  if (match) notify(`Pattern detected: ${match.name} — ready to forge!`);
+}
+
+// ── MODES ──
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + mode)?.classList.add('active');
+  document.getElementById('hud-status').textContent = mode.toUpperCase() + ' MODE';
+
+  if (mode === 'fabricate') { toggleWorkbench(true); }
+  if (mode === 'test') { testRun(); }
+
+  notify(`Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`);
+}
+
+function testRun() {
+  const scene = document.getElementById('main-scene');
+  const items = scene.querySelectorAll('.crafted-item');
+  if (items.length === 0) { notify('No crafted items to test'); return; }
+  items.forEach(el => {
+    el.setAttribute('animation__test', 'property:position; from:0 1.2 -4; to:0 3 -4; dur:1000; dir:alternate; loop:false; easing:easeOutBounce');
+  });
+  notify(`⚡ Test Run: ${items.length} item(s) activated`);
+}
+
+// ── WORKBENCH TOGGLE ──
+function toggleWorkbench(forceOpen = false) {
+  const wb = document.getElementById('workbench-view');
+  if (forceOpen) wb.classList.remove('hidden');
+  else wb.classList.toggle('hidden');
+}
+
+// ── PANEL TOGGLE ──
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+// ── VR ──
+function enterVR() {
+  const scene = document.getElementById('main-scene');
+  if (scene.enterVR) {
+    scene.enterVR();
+  } else {
+    notify('WebXR not supported in this browser. Use Chrome/Edge with a VR headset.');
+  }
+}
+
+// ── SAVE ──
+function saveWorkshop() {
+  const scene = document.getElementById('main-scene');
+  const craftedItems = scene.querySelectorAll('.crafted-item');
+  const state = {
+    timestamp: new Date().toISOString(),
+    craftedCount: craftedItems.length,
+    forgeQueue: forgeQueue.map(q => q.recipe.name),
+    slots: craftingSlots,
+    mode: currentMode,
+  };
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'aetherforge-session.json';
+  a.click();
+  notify('Workshop state archived');
+}
+
+// ── NOTIFICATIONS ──
+function notify(msg, duration = 2800) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), duration);
+}
+
+// ── HUD ANIMATION ──
+function animateHUD() {
+  setInterval(() => {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastTime >= 1000) {
+      lastFPS = Math.round(frameCount * 1000 / (now - lastTime));
+      frameCount = 0; lastTime = now;
+      document.getElementById('fps-counter').textContent = lastFPS + ' FPS';
+    }
+  }, 16);
+}
+
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', (e) => {
+  switch(e.key) {
+    case 'i': case 'I': togglePanel('inventory-panel'); break;
+    case 'c': case 'C': togglePanel('crafting-panel'); break;
+    case 'f': case 'F': toggleWorkbench(); break;
+    case 'v': case 'V': enterVR(); break;
+    case 'Escape': closeInspect(); break;
+    case '1': setMode('workshop'); break;
+    case '2': setMode('fabricate'); break;
+    case '3': setMode('inspect'); break;
+    case '4': setMode('assemble'); break;
+    case '5': setMode('test'); break;
+  }
+});
+
+// ── A-FRAME SCENE READY ──
+document.querySelector('a-scene').addEventListener('loaded', () => {
+  notify('⚙ Ætherforge Workshop ready — WASD to move, click objects to inspect');
+  document.getElementById('obj-count').textContent = '0 OBJECTS';
+});
+
+// ── POINTER LOCK FOR BETTER MOUSE CONTROL ──
+document.getElementById('scene-container').addEventListener('click', function() {
+  const scene = document.getElementById('main-scene');
+  if (!document.pointerLockElement && !scene.is('vr-mode')) {
+    scene.canvas?.requestPointerLock?.();
+  }
+});
+</script>
+</body>
+</html>
